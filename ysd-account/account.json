@@ -1,0 +1,12 @@
+{
+  "available_funds": 8596.9,
+  "total_market_value": 1403.1,
+  "total_assets": 10000.0,
+  "positions": {
+    "510300": {
+      "name": "华泰柏瑞沪深300ETF",
+      "quantity": 300,
+      "avg_cost": 4.677
+    }
+  }
+}

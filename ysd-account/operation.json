@@ -1,0 +1,20 @@
+[
+  {
+    "type": "buy",
+    "stock_code": "510300",
+    "stock_name": "华泰柏瑞沪深300ETF",
+    "price": 4.677,
+    "quantity": 100,
+    "total_amount": 467.7,
+    "timestamp": "2026-03-13 18:43:51"
+  },
+  {
+    "type": "buy",
+    "stock_code": "510300",
+    "stock_name": "华泰柏瑞沪深300ETF",
+    "price": 4.677,
+    "quantity": 200,
+    "total_amount": 935.4,
+    "timestamp": "2026-03-13 19:12:08"
+  }
+]

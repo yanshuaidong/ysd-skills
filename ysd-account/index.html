@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模拟账户 — ysd-account</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d2e;
+    --border: #2a2d3e;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c5ce7;
+    --green: #00cec9;
+    --red: #ff6b6b;
+    --orange: #fdcb6e;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: -.3px; }
+  header .tag {
+    font-size: 12px;
+    background: var(--accent);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .card-title {
+    font-size: 14px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    font-weight: 600;
+  }
+
+  /* Module 1: Account Status */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-box {
+    background: rgba(255,255,255,.03);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .stat-label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .stat-value { font-size: 24px; font-weight: 700; letter-spacing: -.5px; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+
+  .positions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .positions-table th {
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: 500;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .positions-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .empty-state {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 32px;
+    font-size: 14px;
+  }
+
+  /* Module 2: Chart */
+  .chart-wrap { position: relative; height: 280px; }
+
+  /* Module 3: Transactions */
+  .tx-list { list-style: none; }
+  .tx-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .tx-item:last-child { border-bottom: none; }
+  .tx-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .tx-badge.buy  { background: rgba(0,206,201,.15); color: var(--green); }
+  .tx-badge.sell { background: rgba(255,107,107,.15); color: var(--red); }
+  .tx-info { flex: 1; min-width: 0; }
+  .tx-name { font-weight: 600; font-size: 14px; }
+  .tx-detail { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .tx-right { text-align: right; flex-shrink: 0; }
+  .tx-amount { font-weight: 600; font-size: 14px; }
+  .tx-time { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .tx-profit { font-size: 12px; margin-top: 2px; }
+  .tx-profit.pos { color: var(--green); }
+  .tx-profit.neg { color: var(--red); }
+
+  @media (max-width: 600px) {
+    body { padding: 14px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .stat-value { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>模拟交易账户</h1>
+    <span class="tag">ysd-account</span>
+  </header>
+
+  <!-- Module 1 -->
+  <div class="card">
+    <div class="card-title">账户概览</div>
+    <div class="stats-grid" id="statsGrid"></div>
+    <div id="positionsWrap"></div>
+  </div>
+
+  <!-- Module 2 -->
+  <div class="card">
+    <div class="card-title">总资产走势</div>
+    <div class="chart-wrap">
+      <canvas id="assetChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Module 3 -->
+  <div class="card">
+    <div class="card-title">交易记录</div>
+    <div id="txWrap"></div>
+  </div>
+</div>
+
+<script>
+const fmt = n => n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+async function loadJSON(path) {
+  const r = await fetch(path);
+  return r.json();
+}
+
+function renderStats(account) {
+  const items = [
+    { label: "总资产", value: account.total_assets, cls: "" },
+    { label: "可用资金", value: account.available_funds, cls: "" },
+    { label: "总市值", value: account.total_market_value, cls: account.total_market_value > 0 ? "green" : "" },
+    { label: "持仓数量", value: Object.keys(account.positions).length, raw: true },
+  ];
+  document.getElementById("statsGrid").innerHTML = items.map(i => `
+    <div class="stat-box">
+      <div class="stat-label">${i.label}</div>
+      <div class="stat-value ${i.cls}">${i.raw ? i.value : "¥" + fmt(i.value)}</div>
+    </div>
+  `).join("");
+
+  const codes = Object.keys(account.positions);
+  const wrap = document.getElementById("positionsWrap");
+  if (codes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">暂无持仓</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="positions-table">
+      <thead><tr><th>股票</th><th>代码</th><th>数量(股)</th><th>成本价</th><th>市值</th></tr></thead>
+      <tbody>${codes.map(c => {
+        const p = account.positions[c];
+        const mv = p.quantity * p.avg_cost;
+        return `<tr><td>${p.name}</td><td>${c}</td><td>${p.quantity}</td><td>¥${fmt(p.avg_cost)}</td><td>¥${fmt(mv)}</td></tr>`;
+      }).join("")}</tbody>
+    </table>`;
+}
+
+function buildAssetHistory(operations) {
+  const INIT = 10000;
+  const points = [];
+  let funds = INIT;
+  const positions = {};
+
+  const calcTotal = () => {
+    let mv = 0;
+    for (const c in positions) mv += positions[c].quantity * positions[c].avg_cost;
+    return +(funds + mv).toFixed(2);
+  };
+
+  points.push({ date: "初始", total: INIT });
+
+  for (const op of operations) {
+    if (op.type === "buy") {
+      funds = +(funds - op.total_amount).toFixed(2);
+      if (positions[op.stock_code]) {
+        const p = positions[op.stock_code];
+        const oldTotal = p.avg_cost * p.quantity;
+        p.quantity += op.quantity;
+        p.avg_cost = +((oldTotal + op.total_amount) / p.quantity).toFixed(4);
+      } else {
+        positions[op.stock_code] = { quantity: op.quantity, avg_cost: op.price };
+      }
+    } else {
+      const p = positions[op.stock_code];
+      funds = +(funds + op.total_amount).toFixed(2);
+      p.quantity -= op.quantity;
+      if (p.quantity === 0) delete positions[op.stock_code];
+    }
+    const dateLabel = op.timestamp.slice(0, 16);
+    points.push({ date: dateLabel, total: calcTotal() });
+  }
+
+  if (points.length === 1) {
+    points.push({ date: "当前", total: INIT });
+  }
+  return points;
+}
+
+function renderChart(operations) {
+  const history = buildAssetHistory(operations);
+  const ctx = document.getElementById("assetChart").getContext("2d");
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+  gradient.addColorStop(0, "rgba(108,92,231,.35)");
+  gradient.addColorStop(1, "rgba(108,92,231,0)");
+
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: history.map(h => h.date),
+      datasets: [{
+        label: "总资产 (¥)",
+        data: history.map(h => h.total),
+        borderColor: "#6c5ce7",
+        backgroundColor: gradient,
+        borderWidth: 2.5,
+        pointBackgroundColor: "#6c5ce7",
+        pointBorderColor: "#1a1d2e",
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        fill: true,
+        tension: .3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: "index" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#1a1d2e",
+          borderColor: "#2a2d3e",
+          borderWidth: 1,
+          titleColor: "#8b8fa3",
+          bodyColor: "#e1e4ed",
+          bodyFont: { weight: "600" },
+          padding: 12,
+          callbacks: { label: ctx => "¥" + fmt(ctx.parsed.y) }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#8b8fa3", font: { size: 11 } },
+          grid: { color: "rgba(255,255,255,.04)" },
+          border: { display: false }
+        },
+        y: {
+          ticks: {
+            color: "#8b8fa3",
+            font: { size: 11 },
+            callback: v => "¥" + fmt(v)
+          },
+          grid: { color: "rgba(255,255,255,.06)" },
+          border: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderTransactions(operations) {
+  const wrap = document.getElementById("txWrap");
+  if (operations.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">暂无交易记录</div>';
+    return;
+  }
+  const reversed = [...operations].reverse();
+  wrap.innerHTML = `<ul class="tx-list">${reversed.map(op => {
+    const isBuy = op.type === "buy";
+    let profitHtml = "";
+    if (!isBuy && op.profit !== undefined) {
+      const cls = op.profit >= 0 ? "pos" : "neg";
+      const sign = op.profit >= 0 ? "+" : "";
+      profitHtml = `<div class="tx-profit ${cls}">${sign}¥${fmt(op.profit)}</div>`;
+    }
+    return `
+      <li class="tx-item">
+        <span class="tx-badge ${op.type}">${isBuy ? "买入" : "卖出"}</span>
+        <div class="tx-info">
+          <div class="tx-name">${op.stock_name}（${op.stock_code}）</div>
+          <div class="tx-detail">${op.quantity}股 × ¥${fmt(op.price)}</div>
+        </div>
+        <div class="tx-right">
+          <div class="tx-amount" style="color:${isBuy ? "var(--green)" : "var(--red)"}">${isBuy ? "-" : "+"}¥${fmt(op.total_amount)}</div>
+          <div class="tx-time">${op.timestamp}</div>
+          ${profitHtml}
+        </div>
+      </li>`;
+  }).join("")}</ul>`;
+}
+
+(async () => {
+  try {
+    const [account, operations] = await Promise.all([
+      loadJSON("account.json"),
+      loadJSON("operation.json")
+    ]);
+    renderStats(account);
+    renderChart(operations);
+    renderTransactions(operations);
+  } catch (e) {
+    document.querySelector(".container").innerHTML =
+      `<div class="card"><div class="empty-state">加载数据失败，请通过 HTTP 服务器访问此页面<br><code>python3 -m http.server 8080</code></div></div>`;
+  }
+})();
+</script>
+</body>
+</html>
